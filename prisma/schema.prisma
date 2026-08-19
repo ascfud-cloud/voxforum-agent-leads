@@ -1,0 +1,128 @@
+// ============================================================================
+// VOXFORUM LEADS AGENT — databaza e vet, krejt e ndarë nga VoxForum.
+// Kjo lidhet me Supabase Postgres (projekt i ri, jo databaza e VoxForum).
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Një pjesëmarrës i VoxForum që ka hyrë në trial e Agjentit.
+// participantId = i njëjti "userId"/identity që përdor VoxForum + LiveKit,
+// kjo është "ura" e vetme mes dy sistemeve (shih shënimin te lib/README).
+model TrialParticipant {
+  id               String    @id @default(uuid())
+  participantId    String    @unique // = userId i VoxForum = identity në LiveKit
+  discussionSlug   String
+  email            String
+  name             String
+  status           String    @default("pending_transcript")
+  // pending_transcript -> active -> ending_soon -> expired -> subscribed / churned
+  trialStartedAt   DateTime  @default(now())
+  trialEndsAt      DateTime
+  serviceProfile   ServiceProfile?
+  leads            Lead[]
+  notifications    AdminNotification[]
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([status])
+  @@index([trialEndsAt])
+}
+
+// Rezultati i hapit "Extraction": çfarë ofron ky pjesëmarrës + ku duhet kërkuar.
+model ServiceProfile {
+  id                 String            @id @default(uuid())
+  participant        TrialParticipant  @relation(fields: [participantId], references: [participantId])
+  participantId      String            @unique
+  rawTranscript      String            // transkripti i pastër, vetëm i tij (nga LiveKit Egress)
+  serviceSummary     String            // p.sh. "sherbime kontabiliteti per biznese te vogla"
+  targetIndustries   String[]          // p.sh. ["software", "restorante", "klinika"]
+  location           String            // qyteti/zona e vendosur nga pjesëmarrësi
+  locationRadiusKm   Int               @default(15)
+  confirmedByUser    Boolean           @default(false)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+}
+
+// Një kompani/kontakt i gjetur dhe i dërguar (ose gati për dërgim).
+model Lead {
+  id               String            @id @default(uuid())
+  participant      TrialParticipant  @relation(fields: [participantId], references: [participantId])
+  participantId    String
+  companyName      String
+  website          String
+  contactEmail     String?
+  contactPhone     String?
+  contactPersonName String?          // nëse gjendet emër specifik (manager/admin)
+  contactSource    String            // "manager" | "admin" | "generic" | "form_only"
+  industryMatched  String            // kategoria konkrete që u kërkua
+  reasonMatched    String            // shpjegimi i shkurtër i dërguar te pjesëmarrësi
+  status           String            @default("sent")
+  // sent -> contacted -> no_response -> in_conversation -> converted -> not_relevant
+  feedback         Feedback?
+  agentContactRequested Boolean      @default(false) // "kontaktoje ti per mua"
+  agentContactSentAt    DateTime?
+  sentAt           DateTime          @default(now())
+  createdAt        DateTime          @default(now())
+
+  @@index([participantId, status])
+  @@index([companyName, participantId]) // ndihmon filtrin anti-dublikatë
+}
+
+// Feedback i shkurtër i pjesëmarrësit për një lead specifik.
+model Feedback {
+  id           String   @id @default(uuid())
+  lead         Lead     @relation(fields: [leadId], references: [id])
+  leadId       String   @unique
+  outcome      String   // "relevant" | "not_relevant" | "converted" | "no_response"
+  note         String?
+  receivedAt   DateTime @default(now())
+}
+
+// Abonimi pas trial-it (fusha billing minimale — pa hyrë në detaje pagese këtu).
+model Subscription {
+  id               String   @id @default(uuid())
+  participantId    String   @unique
+  plan             String   @default("trial") // trial | monthly_90 | sponsor_included
+  status           String   @default("trial")  // trial | active | cancelled | expired
+  monthlyPriceEur  Int?
+  startedAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+// I VENDOSUR MANUALISHT NGA ADMINI (ti), kurrë automatikisht — sepse kush
+// është sponsor me paketën 2500€ (leads included) është kontratë biznesi,
+// jo diçka që sistemi mund ta hamendësojë nga transkripti apo databaza.
+// E kontrollon Agjenti kur dikush nga ky domain/email bëhet speaker:
+// nëse ekziston këtu -> leads pa limit 30-ditësh, pa ofertën 90€.
+model SponsorAccount {
+  id            String   @id @default(uuid())
+  companyName   String
+  contactEmail  String   @unique // email-i i personit që do marrë leads-et
+  emailDomain   String?          // opsionale: p.sh. "kompania.al" për të njohur çdo pjesëmarrës të asaj kompanie
+  hasLeadsIncluded Boolean @default(true) // false = paketa 2000€ (vetëm platformë, pa leads)
+  yearlyPriceEur   Int     @default(2500)
+  addedByAdminAt   DateTime @default(now())
+  active           Boolean @default(true)
+  notes            String?
+}
+
+// Njoftimet/flamujt për ty (adminin) — burimi për dashboard-in real-time.
+model AdminNotification {
+  id             String            @id @default(uuid())
+  participant    TrialParticipant  @relation(fields: [participantId], references: [participantId])
+  participantId  String
+  type           String            // "trial_started" | "trial_ending_soon" | "no_feedback_streak" | "converted" | "error"
+  severity       String            @default("info") // info | warning | critical
+  message        String
+  read           Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+
+  @@index([read, createdAt])
+}
