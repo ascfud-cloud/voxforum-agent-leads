@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
   const body = await req.text()
   const authHeader = req.headers.get('Authorization')
 
-  const event = verifyLiveKitWebhook(body, authHeader)
+  const event = await verifyLiveKitWebhook(body, authHeader)
   if (!event || event.event !== 'egress_ended') {
     return NextResponse.json({ ok: true }) // injorojmë çdo tjetër lloj eventi
   }
