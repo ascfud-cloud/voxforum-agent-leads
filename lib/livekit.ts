@@ -33,6 +33,6 @@ export async function startSpeakerEgress(roomName: string, participantIdentity: 
   })
 
   return egressClient.startParticipantEgress(roomName, participantIdentity, {
-    fileOutputs: [fileOutput],
+    file: fileOutput,
   })
 }
