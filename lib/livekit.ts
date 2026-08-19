@@ -10,11 +10,12 @@ const egressClient = new EgressClient(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_
 const webhookReceiver = new WebhookReceiver(LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
 
 // Verifikon që webhook-u erdhi vërtet nga LiveKit (jo dikush tjetër që
-// thërret endpoint-in tonë duke u shtirë si LiveKit).
-export function verifyLiveKitWebhook(body: string, authHeader: string | null) {
+// thërret endpoint-in tonë duke u shtirë si LiveKit). receive() e SDK-së
+// kthen Promise, prandaj funksioni këtu është async.
+export async function verifyLiveKitWebhook(body: string, authHeader: string | null) {
   if (!authHeader) return null
   try {
-    return webhookReceiver.receive(body, authHeader)
+    return await webhookReceiver.receive(body, authHeader)
   } catch {
     return null
   }
