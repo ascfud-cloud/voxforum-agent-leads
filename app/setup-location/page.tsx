@@ -15,8 +15,12 @@ async function saveLocation(formData: FormData) {
   redirect('/setup-location/done')
 }
 
-export default async function SetupLocationPage({ searchParams }: { searchParams: { participant?: string } }) {
-  const participantId = searchParams.participant
+export default async function SetupLocationPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ participant?: string }>
+}) {
+  const { participant: participantId } = await searchParams
   if (!participantId) return <p style={{ padding: 40 }}>Link i pavlefshëm.</p>
 
   const profile = await prisma.serviceProfile.findUnique({ where: { participantId } })
