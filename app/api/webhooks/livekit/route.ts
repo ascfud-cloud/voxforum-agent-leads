@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyLiveKitWebhook, startSpeakerEgress } from '@/lib/livekit'
+import { TrackType } from '@livekit/protocol'
 
 // Kjo është pika ku Agjenti "dëgjon" LiveKit-in NGA JASHTË — VoxForum
 // s'e di fare që kjo po ndodh. Konfigurohet te dashboard-i i LiveKit:
-// Settings -> Webhooks -> URL e këtij endpoint-i.
+// Settings -> Webhooks -> URL e këtij endpoint-it.
 export async function POST(req: NextRequest) {
   const body = await req.text()
   const authHeader = req.headers.get('Authorization')
@@ -15,7 +16,8 @@ export async function POST(req: NextRequest) {
 
   // Na intereson vetëm momenti kur dikush fillon të publikojë ZË
   // (d.m.th. u bë "speaker" në VoxForum — host-i e aprovoi raise hand-in).
-  if (event.event === 'track_published' && event.track?.type === 'AUDIO') {
+  // TrackType është enum numerik në SDK (AUDIO = 0), jo string 'AUDIO'.
+  if (event.event === 'track_published' && event.track?.type === TrackType.AUDIO) {
     const roomName = event.room?.name
     const participantIdentity = event.participant?.identity
 
