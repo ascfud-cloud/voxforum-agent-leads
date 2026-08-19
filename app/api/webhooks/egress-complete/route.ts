@@ -19,8 +19,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true }) // injorojmë çdo tjetër lloj eventi
   }
 
-  const participantIdentity = event.egressInfo?.participantEgress?.participantIdentity
-  const fileUrl = event.egressInfo?.fileResults?.[0]?.location
+  const egressInfo = event.egressInfo
+  const participantIdentity =
+    egressInfo?.request?.case === 'participant' ? egressInfo.request.value.identity : undefined
+  const fileUrl = egressInfo?.fileResults?.[0]?.location
 
   if (!participantIdentity || !fileUrl) {
     return NextResponse.json({ ok: true })
@@ -36,8 +38,6 @@ export async function POST(req: NextRequest) {
   // 2) Transkripton skedarin e pastër (vetëm ky person).
   const transcript = await transcribeSpeakerAudio(fileUrl)
   if (transcript.length < 50) {
-    // Foli shumë pak — s'ka mjaftueshëm kontekst për një profil të sigurt.
-    // Nuk hamendësojmë, thjesht s'e fusim në trial.
     return NextResponse.json({ ok: true, skipped: 'transcript too short' })
   }
 
@@ -47,8 +47,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, skipped: 'no confident industries extracted' })
   }
 
-  // 4) Vendos planin — trial normal apo sponsor_included (shih lib/plan.ts,
-  // pyetja jote për sponsorët).
+  // 4) Vendos planin — trial normal apo sponsor_included.
   const planDecision = await decidePlanForParticipant(voxforumData.email)
 
   const participant = await prisma.trialParticipant.upsert({
@@ -65,11 +64,11 @@ export async function POST(req: NextRequest) {
           rawTranscript: transcript,
           serviceSummary: profile.serviceSummary,
           targetIndustries: profile.targetIndustries,
-          location: '', // kërkohet ende nga pjesëmarrësi — shih shënim poshtë
+          location: '',
         },
       },
     },
-    update: {}, // nëse ekziston tashmë, s'e rikrijojmë
+    update: {},
   })
 
   await prisma.subscription.upsert({
@@ -85,8 +84,6 @@ export async function POST(req: NextRequest) {
     `${voxforumData.name} filloi ${planDecision.plan === 'sponsor_included' ? 'shërbimin (sponsor)' : 'trial-in 30-ditor'}.`
   )
 
-  // Profili ende s'ka "location" — pjesëmarrësi e vendos vetë (zona s'nxirret
-  // nga transkripti, siç u vendos). I dërgohet një link drejt /setup-location.
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || ''
   await sendWelcomeSetLocationEmail(
     voxforumData.email,
