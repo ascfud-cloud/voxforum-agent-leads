@@ -25,11 +25,24 @@ export async function verifyLiveKitWebhook(body: string, authHeader: string | nu
 // (Participant Egress). LiveKit vetë e ndalon kur ai person largohet.
 // Rezultati (fileUrl) do të vijë më vonë përmes një webhook tjetër
 // ("egress_ended"), trajtuar te app/api/webhooks/egress-complete.
+//
+// Storage-i (Supabase Storage, S3-compatible) specifikohet KËTU, në kod,
+// sepse LiveKit Cloud s'ofron konfigurim storage-i te dashboard — faqja
+// "Egresses" atje është vetëm monitorim/histori, jo konfigurim.
 export async function startSpeakerEgress(roomName: string, participantIdentity: string) {
   const fileOutput = new EncodedFileOutput({
     filepath: `recordings/${roomName}/${participantIdentity}-{time}.mp4`,
-    // Storage-i (S3/Supabase Storage/GCP) konfigurohet te Egress project
-    // settings në dashboard-in e LiveKit, jo këtu në kod.
+    output: {
+      case: 's3',
+      value: {
+        accessKey: process.env.SUPABASE_S3_ACCESS_KEY_ID || '',
+        secret: process.env.SUPABASE_S3_SECRET_ACCESS_KEY || '',
+        endpoint: process.env.SUPABASE_S3_ENDPOINT || '',
+        region: process.env.SUPABASE_S3_REGION || '',
+        bucket: process.env.SUPABASE_S3_BUCKET || 'speaker-recordings',
+        forcePathStyle: true, // kërkohet nga shumica e shërbimeve S3-compatible (jo AWS vetë)
+      },
+    },
   })
 
   return egressClient.startParticipantEgress(roomName, participantIdentity, {
